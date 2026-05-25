@@ -21,4 +21,9 @@ class Settings:
     # Queue Configuration (e.g., Redis URL if using Celery/ARQ)
     REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
+    # LLM API Keys
+    GOOGLE_API_KEY: str = os.getenv("GOOGLE_API_KEY", "")
+    TYPHOON_API_KEY: str = os.getenv("TYPHOON_API_KEY", "")
+    THAI_LLM_API_KEY: str = os.getenv("THAI_LLM_API_KEY", "")
+
 settings = Settings()

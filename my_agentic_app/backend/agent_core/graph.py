@@ -12,17 +12,15 @@ from langchain_core.messages import HumanMessage
 from backend.agent_core.state import AgentState
 from backend.agent_core.tools.db_tools import check_inventory_stock, update_inventory_quantity, add_new_product
 from backend.agent_core.tools.parser_tools import extract_slip_data
+from backend.core.llm_factory import LLMFactory
 
-# 1. Initialize the Gemma Model
-# Note: Ensure the model name matches the exact string provided by Google AI Studio/Vertex AI
-# Currently using "gemma-4-31b" as requested. 
-# If this is a custom or preview model, ensure your API Key has access permissions.
-llm = ChatGoogleGenerativeAI(
-    model="gemini-3.1-flash-lite",  # Adjusting to your specific requested version
-    temperature=0.1,      # Lower temperature for more precise operation management
-    max_tokens=2048,
-    timeout=30,
-    max_retries=2
+## 1. Initialize the LLM via Factory Pattern
+# You can easily switch providers here (e.g., provider="typhoon", model_name="typhoon-v1.5x-70b-instruct")
+llm = LLMFactory.create_llm(
+    provider="typhoon", 
+    model_name="typhoon-v2.5-30b-a3b-instruct",
+    # model_name="pathumma-thaillm-qwen3-8b-think-3.0.0",
+    temperature=0.1
 )
 
 # 2. Define and Bind Tools
