@@ -10,14 +10,15 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage
 
 from backend.agent_core.state import AgentState
-from backend.agent_core.tools.db_tools import check_inventory_stock
+from backend.agent_core.tools.db_tools import check_inventory_stock, update_inventory_quantity, add_new_product
+from backend.agent_core.tools.parser_tools import extract_slip_data
 
 # 1. Initialize the Gemma Model
 # Note: Ensure the model name matches the exact string provided by Google AI Studio/Vertex AI
 # Currently using "gemma-4-31b" as requested. 
 # If this is a custom or preview model, ensure your API Key has access permissions.
 llm = ChatGoogleGenerativeAI(
-    model="gemini-2.5-flash-lite",  # Adjusting to your specific requested version
+    model="gemini-3.1-flash-lite",  # Adjusting to your specific requested version
     temperature=0.1,      # Lower temperature for more precise operation management
     max_tokens=2048,
     timeout=30,
@@ -26,7 +27,12 @@ llm = ChatGoogleGenerativeAI(
 
 # 2. Define and Bind Tools
 # Gemma models (especially 27B+ versions) have strong reasoning for tool calling
-agent_tools = [check_inventory_stock]
+agent_tools = [
+    check_inventory_stock,
+    update_inventory_quantity,
+    add_new_product,
+    extract_slip_data
+]
 llm_with_tools = llm.bind_tools(agent_tools)
 
 # 3. Define Graph Nodes with Async Support

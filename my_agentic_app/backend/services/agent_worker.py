@@ -31,13 +31,23 @@ class AgentWorkerService:
             return
             
         message_data = event.get("message", {})
-        if message_data.get("type") != "text":
-            logger.info(f"Skipping unhandled message type: {message_data.get('type')}")
-            return
-            
+        msg_type = message_data.get("type")
         user_id = event.get("source", {}).get("userId", "")
         reply_token = event.get("replyToken", "")
         user_text = message_data.get("text", "")
+
+        if msg_type == "text":
+            logger.info(f"Processing TEXT from user {user_id}: {user_text}")
+            
+        elif msg_type == "image":
+            msg_id = message_data.get("id")
+            # Construct a system prompt disguised as user input to trigger the OCR tool
+            user_text = f"[System Context: The user just uploaded an image. The LINE message_id for this image is '{msg_id}'. Please use the 'extract_slip_data' tool to read this image and tell the user what you found.]"
+            logger.info(f"Processing IMAGE from user {user_id}. Message ID: {msg_id}")
+            
+        else:
+            logger.info(f"Skipping unhandled message type: {msg_type}")
+            return
         
         if not reply_token:
             logger.warning("Missing replyToken in event. Cannot respond.")
@@ -55,21 +65,44 @@ class AgentWorkerService:
 
         try:
             # Invoke the graph asynchronously (ainvoke)
-            # This triggers gemma-4-31b and any database tools automatically
+            # This triggers LLM and any database tools automatically
             final_state = await app_graph.ainvoke(initial_state)
             
             # Extract the last AI message from the conversation state
             messages = final_state.get("messages", [])
+            logger.info(f"LLM Messages: {messages}")
+            
             if messages:
-                final_ai_message = messages[-1].content
-
-                # Ensure the content is safely converted to a string
-                if isinstance(final_ai_message, list):
-                    # In case of multimodal or block content
-                    final_ai_message = " ".join([str(item) for item in final_ai_message if isinstance(item, str) or "text" in str(item)])
-                else:
-                    final_ai_message = str(final_ai_message)
+                last_message_content = messages[-1].content
+                final_ai_message = ""
                 
+                # กรณีที่ 1: โมเดลตอบกลับมาเป็น String ธรรมดา
+                if isinstance(last_message_content, str):
+                    final_ai_message = last_message_content
+                    
+                # กรณีที่ 2: โมเดลตอบกลับมาเป็น List (เช่น หลังเรียก Tool หรือมีโครงสร้างซับซ้อน)
+                elif isinstance(last_message_content, list):
+                    extracted_texts = []
+                    for item in last_message_content:
+                        # ถ้าข้างใน List เป็น String
+                        if isinstance(item, str):
+                            extracted_texts.append(item)
+                        # ถ้าข้างใน List เป็น Dictionary แบบที่คุณเจอ
+                        elif isinstance(item, dict) and "text" in item:
+                            extracted_texts.append(item["text"])
+                    
+                    # นำข้อความที่แกะได้มารวมกัน
+                    final_ai_message = " ".join(extracted_texts).strip()
+                    
+                # กรณีที่ 3: Fallback กันเหนียวสำหรับ Type อื่นๆ ที่ไม่คาดคิด
+                else:
+                    final_ai_message = str(last_message_content)
+                
+                # ป้องกันกรณีแกะข้อความแล้วได้ค่าว่างเปล่า
+                if not final_ai_message:
+                    logger.warning("Agent returned an empty message structure.")
+                    final_ai_message = "ทำรายการเรียบร้อยแล้วครับ"
+
                 # Send the answer back to the user on LINE asynchronously
                 await LineMessengerService.send_reply(reply_token, final_ai_message)
             else:
