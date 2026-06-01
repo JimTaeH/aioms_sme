@@ -53,20 +53,39 @@ async def extract_slip_data(message_id: str) -> str:
     # Using a Multipart form-data upload for the image bytes
     files = {"file": ("slip.jpg", image_bytes, "image/jpeg")}
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    # Increased timeout to 60 seconds since OCR processes can be heavy
+    async with httpx.AsyncClient(timeout=60.0) as client:
         try:
             ocr_response = await client.post(typhoon_url, headers=headers, files=files)
+            
+            # Will raise httpx.HTTPStatusError for 4XX or 5XX status codes
             ocr_response.raise_for_status()
             
-            # Assuming Typhoon returns JSON with an 'extracted_text' or similar field
-            result_data = ocr_response.json()
-            extracted_text = result_data.get("text", str(result_data))
+            # Read raw response first to prevent JSON decode crashes
+            raw_text = ocr_response.text
+            logger.debug(f"Raw OCR Response from Typhoon: {raw_text}")
+            
+            try:
+                result_data = ocr_response.json()
+                # Typhoon might return the text in different keys depending on the exact endpoint version
+                extracted_text = result_data.get("text", str(result_data))
+            except ValueError:
+                # If the response is not valid JSON, fallback to using the raw text
+                logger.warning("Typhoon OCR response is not a valid JSON. Using raw text.")
+                extracted_text = raw_text
             
             return f"OCR Extraction Successful. Data found: {extracted_text}"
             
         except httpx.HTTPStatusError as e:
-            logger.error(f"Typhoon API error: {e.response.text}")
-            return f"Error from OCR engine: {e.response.status_code}"
+            logger.error(f"Typhoon API HTTP error: {e.response.status_code} - {e.response.text}")
+            return f"Error from OCR engine: HTTP {e.response.status_code}"
+            
+        except httpx.RequestError as e:
+            # Captures TimeoutException, ConnectionError, etc.
+            logger.error(f"Typhoon API Network/Timeout error: {str(e)}")
+            return "Error: Network timeout or connection failed with OCR service."
+            
         except Exception as e:
-            logger.error(f"Error connecting to Typhoon OCR: {str(e)}")
-            return "Error: Failed to process the image with OCR."
+            # Catch-all for any other unexpected errors
+            logger.error(f"Unexpected error in OCR processing: {str(e)}")
+            return f"Error: Failed to process the image with OCR due to an internal error."

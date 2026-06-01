@@ -4,10 +4,21 @@ Processes the state, invokes the model, and dispatches the final response.
 """
 import logging
 from langchain_core.messages import HumanMessage
-from backend.agent_core.graph import app_graph
+
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+from backend.agent_core.graph import workflow
+
+# from backend.agent_core.graph import app_graph
 from backend.services.line_messenger import LineMessengerService
 
+from backend.services.user_service import UserService
+from backend.core.database import DATABASE_URL
+
 logger = logging.getLogger(__name__)
+
+# The PostgresSaver uses psycopg3, which requires the standard postgresql:// URL format
+# We remove '+asyncpg' from our SQLAlchemy URL if it exists
+PG_CHECKPOINT_URL = DATABASE_URL.replace("+asyncpg", "")
 
 class AgentWorkerService:
     """
@@ -55,6 +66,11 @@ class AgentWorkerService:
 
         logger.info(f"Processing message from user {user_id}: {user_text}")
 
+        # Auto-register the user asynchronously before processing the agent logic
+        await UserService.register_user_if_not_exists(user_id)
+
+        config = {"configurable": {"thread_id": user_id}}
+
         # Initialize the LangGraph state
         initial_state = {
             "messages": [HumanMessage(content=user_text)],
@@ -64,9 +80,14 @@ class AgentWorkerService:
         }
 
         try:
-            # Invoke the graph asynchronously (ainvoke)
-            # This triggers LLM and any database tools automatically
-            final_state = await app_graph.ainvoke(initial_state)
+            async with AsyncPostgresSaver.from_conn_string(PG_CHECKPOINT_URL) as checkpointer:
+                # Automatically creates 'checkpoints' and 'checkpoint_writes' tables if they don't exist
+                await checkpointer.setup()
+                # Compile the workflow dynamically with the persistent checkpointer
+                app_graph = workflow.compile(checkpointer=checkpointer)
+                # Invoke the graph asynchronously (ainvoke)
+                # This triggers LLM and any database tools automatically
+                final_state = await app_graph.ainvoke(initial_state, config=config)
             
             # Extract the last AI message from the conversation state
             messages = final_state.get("messages", [])

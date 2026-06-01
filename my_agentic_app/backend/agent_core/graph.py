@@ -10,9 +10,13 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage
 
 from backend.agent_core.state import AgentState
+# from langgraph.checkpoint.memory import MemorySaver
+
 from backend.agent_core.tools.db_tools import check_inventory_stock, update_inventory_quantity, add_new_product
 from backend.agent_core.tools.parser_tools import extract_slip_data
 from backend.core.llm_factory import LLMFactory
+
+from langchain_core.messages import trim_messages
 
 ## 1. Initialize the LLM via Factory Pattern
 # You can easily switch providers here (e.g., provider="typhoon", model_name="typhoon-v1.5x-70b-instruct")
@@ -38,10 +42,27 @@ async def chatbot_node(state: AgentState):
     """
     Primary agent node that processes messages using the Gemma model.
     """
-    # Using ainvoke for full asynchronous non-blocking execution
-    response = await llm_with_tools.ainvoke(state["messages"])
+    # 1. Get the full conversation history from the state
+    full_messages = state.get("messages", [])
+    
+    # 2. Trim the messages to keep only the most recent ones
+    # For example, max_tokens=10 means keeping the last 10 messages (approx 5 turns).
+    # token_counter=len means we are counting the number of messages, not actual text tokens.
+    trimmed_messages = trim_messages(
+        full_messages,
+        max_tokens=10, 
+        strategy="last",
+        token_counter=len,
+        include_system=True, # Set to True if you have a SystemMessage at index 0 that must be kept
+        allow_partial=False  # Ensures we don't break tool-call message pairs
+    )
+    
+    # 3. Invoke the LLM with the short-term window
+    response = await llm_with_tools.ainvoke(trimmed_messages)
+    
+    # 4. Return ONLY the new response. 
+    # LangGraph's operator.add will append this to the full state in the database.
     return {"messages": [response]}
-
 # Standard ToolNode for executing function calls
 tools_node = ToolNode(tools=agent_tools)
 
@@ -78,5 +99,7 @@ workflow.add_conditional_edges(
 # Circular edge: always return to agent after tool execution to parse results
 workflow.add_edge("tools", "agent")
 
-# 5. Compile the Final Graph
-app_graph = workflow.compile()
+# memory = MemorySaver()
+
+# # 5. Compile the Final Graph
+# app_graph = workflow.compile(checkpointer=memory)
