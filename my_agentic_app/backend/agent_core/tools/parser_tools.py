@@ -10,19 +10,22 @@ from langchain_core.tools import tool
 from linebot.v3.messaging import AsyncApiClient, AsyncMessagingApi, Configuration, AsyncMessagingApiBlob
 from backend.core.config import settings
 
+from backend.services.document_service import DocumentService
+
 logger = logging.getLogger(__name__)
 
 @tool
-async def extract_slip_data(message_id: str) -> str:
+async def extract_slip_data(message_id: str, line_user_id: str) -> str:
     """
-    Downloads an image message from LINE and extracts text/slip data using Typhoon-OCR.
-    Use this tool ONLY when the user uploads an image and provides a message_id.
+    Downloads an image message from LINE, extracts text using Typhoon-OCR, and saves the record.
+    Use this tool ONLY when the user uploads an image and provides a message_id and line_user_id.
     
     Args:
-        message_id (str): The LINE message ID of the image uploaded by the user.
+        message_id (str): The LINE message ID of the image.
+        line_user_id (str): The LINE ID of the user who sent the image.
         
     Returns:
-        str: The extracted JSON data or text from the OCR process.
+        str: The extracted text to answer the user.
     """
     # 1. Initialize LINE SDK to fetch the image content
     configuration = Configuration(access_token=settings.LINE_CHANNEL_ACCESS_TOKEN)
@@ -69,10 +72,25 @@ async def extract_slip_data(message_id: str) -> str:
                 result_data = ocr_response.json()
                 # Typhoon might return the text in different keys depending on the exact endpoint version
                 extracted_text = result_data.get("text", str(result_data))
+
+                await DocumentService.save_ocr_document(
+                    line_user_id=line_user_id, 
+                    message_id=message_id, 
+                    extracted_data=result_data, 
+                    status="completed"
+                )
+
             except ValueError:
                 # If the response is not valid JSON, fallback to using the raw text
                 logger.warning("Typhoon OCR response is not a valid JSON. Using raw text.")
                 extracted_text = raw_text
+                # Save raw text if JSON parsing fails
+                await DocumentService.save_ocr_document(
+                    line_user_id=line_user_id, 
+                    message_id=message_id, 
+                    extracted_data={"raw_response": raw_text}, 
+                    status="completed"
+                )
             
             return f"OCR Extraction Successful. Data found: {extracted_text}"
             

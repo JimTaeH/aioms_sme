@@ -53,7 +53,7 @@ class AgentWorkerService:
         elif msg_type == "image":
             msg_id = message_data.get("id")
             # Construct a system prompt disguised as user input to trigger the OCR tool
-            user_text = f"[System Context: The user just uploaded an image. The LINE message_id for this image is '{msg_id}'. Please use the 'extract_slip_data' tool to read this image and tell the user what you found.]"
+            user_text = f"[System Context: The user just uploaded an image. The LINE message_id for this image is '{msg_id}' and the line_user_id is '{user_id}' . Please use the 'extract_slip_data' tool to read this image and tell the user what you found.]"
             logger.info(f"Processing IMAGE from user {user_id}. Message ID: {msg_id}")
             
         else:
