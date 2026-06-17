@@ -14,6 +14,27 @@ class UserService:
     """
     
     @staticmethod
+    async def get_user_profile(line_user_id: str) -> Optional[User]:
+        """
+        Retrieves the complete user profile from the database using their LINE ID.
+        Useful for checking user roles (RBAC) and customer grades before executing agent tools.
+        
+        Args:
+            line_user_id (str): The unique identifier provided by LINE.
+            
+        Returns:
+            Optional[User]: The user model instance if found, None otherwise.
+        """
+        async with AsyncSessionLocal() as db:
+            try:
+                query = select(User).where(User.line_user_id == line_user_id)
+                result = await db.execute(query)
+                return result.scalars().first()
+            except Exception as e:
+                logger.error(f"Failed to fetch user profile for {line_user_id}: {str(e)}")
+                return None
+
+    @staticmethod
     async def register_user_if_not_exists(line_user_id: str) -> None:
         """
         Checks if a user with the given LINE ID exists in the database.
