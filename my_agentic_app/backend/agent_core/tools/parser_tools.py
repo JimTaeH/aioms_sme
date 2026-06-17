@@ -11,10 +11,11 @@ from linebot.v3.messaging import AsyncApiClient, AsyncMessagingApi, Configuratio
 from backend.core.config import settings
 
 from backend.services.document_service import DocumentService
+from backend.schemas.tool_schemas import ExtractSlipDataInput
 
 logger = logging.getLogger(__name__)
 
-@tool
+@tool(args_schema=ExtractSlipDataInput)
 async def extract_slip_data(message_id: str, line_user_id: str) -> str:
     """
     Downloads an image message from LINE, extracts text using Typhoon-OCR, and saves the record.

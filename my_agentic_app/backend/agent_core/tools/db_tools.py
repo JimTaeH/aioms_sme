@@ -6,11 +6,18 @@ from langchain_core.tools import tool
 from sqlalchemy import select
 from backend.core.database import AsyncSessionLocal
 from backend.models.inventory import InventoryItem
+
+from backend.schemas.tool_schemas import (
+    CheckInventoryInput,
+    UpdateInventoryInput,
+    AddProductInput
+)
+
 import logging
 
 logger = logging.getLogger(__name__)
 
-@tool
+@tool(args_schema=CheckInventoryInput)
 async def check_inventory_stock(sku: str) -> str:
     """
     Queries the database to check the current stock level and price of a specific product using its SKU.
@@ -37,7 +44,7 @@ async def check_inventory_stock(sku: str) -> str:
         except Exception as e:
             return f"Error accessing database: {str(e)}"
 
-@tool
+@tool(args_schema=UpdateInventoryInput)
 async def update_inventory_quantity(sku: str, quantity_change: int) -> str:
     """
     Updates the stock quantity of a product in the inventory.
@@ -72,7 +79,7 @@ async def update_inventory_quantity(sku: str, quantity_change: int) -> str:
             await db.rollback()
             return f"Error updating database: {str(e)}"
 
-@tool
+@tool(args_schema=AddProductInput)
 async def add_new_product(sku: str, product_name: str, price: float, initial_quantity: int = 0) -> str:
     """
     Registers a new product into the inventory system.

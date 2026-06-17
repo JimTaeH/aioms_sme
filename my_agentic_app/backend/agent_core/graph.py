@@ -7,7 +7,7 @@ import os
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 
 from backend.agent_core.state import AgentState
 # from langgraph.checkpoint.memory import MemorySaver
@@ -17,6 +17,7 @@ from backend.agent_core.tools.parser_tools import extract_slip_data
 from backend.core.llm_factory import LLMFactory
 
 from langchain_core.messages import trim_messages
+from backend.agent_core.prompts.system_prompts import MAIN_AGENT_PROMPT
 
 ## 1. Initialize the LLM via Factory Pattern
 # You can easily switch providers here (e.g., provider="typhoon", model_name="typhoon-v1.5x-70b-instruct")
@@ -42,15 +43,19 @@ async def chatbot_node(state: AgentState):
     """
     Primary agent node that processes messages using the Gemma model.
     """
+    system_instruction = SystemMessage(content=MAIN_AGENT_PROMPT)
     # 1. Get the full conversation history from the state
     full_messages = state.get("messages", [])
+
+    filtered_messages = [msg for msg in full_messages if not isinstance(msg, SystemMessage)]
+    context_messages = [system_instruction] + filtered_messages
     
     # 2. Trim the messages to keep only the most recent ones
     # For example, max_tokens=10 means keeping the last 10 messages (approx 5 turns).
     # token_counter=len means we are counting the number of messages, not actual text tokens.
     trimmed_messages = trim_messages(
-        full_messages,
-        max_tokens=10, 
+        context_messages,
+        max_tokens=6, 
         strategy="last",
         token_counter=len,
         include_system=True, # Set to True if you have a SystemMessage at index 0 that must be kept
