@@ -17,7 +17,7 @@ from backend.agent_core.tools.parser_tools import extract_slip_data
 from backend.core.llm_factory import LLMFactory
 
 from langchain_core.messages import trim_messages
-from backend.agent_core.prompts.system_prompts import MAIN_AGENT_PROMPT
+from backend.agent_core.prompts.system_prompts import get_main_agent_prompt
 
 ## 1. Initialize the LLM via Factory Pattern
 # You can easily switch providers here (e.g., provider="typhoon", model_name="typhoon-v1.5x-70b-instruct")
@@ -38,14 +38,19 @@ agent_tools = [
 ]
 llm_with_tools = llm.bind_tools(agent_tools)
 
+SENSITIVE_TOOLS = ["check_inventory_stock", "update_inventory_quantity", "add_new_product"]
+
 # 3. Define Graph Nodes with Async Support
 async def chatbot_node(state: AgentState):
     """
     Primary agent node that processes messages using the Gemma model.
     """
-    system_instruction = SystemMessage(content=MAIN_AGENT_PROMPT)
     # 1. Get the full conversation history from the state
     full_messages = state.get("messages", [])
+    user_role = state.get("user_role", "customer")
+
+    # system_instruction = SystemMessage(content=MAIN_AGENT_PROMPT)
+    system_instruction = get_main_agent_prompt(user_role)
 
     filtered_messages = [msg for msg in full_messages if not isinstance(msg, SystemMessage)]
     context_messages = [system_instruction] + filtered_messages
@@ -71,6 +76,46 @@ async def chatbot_node(state: AgentState):
 # Standard ToolNode for executing function calls
 tools_node = ToolNode(tools=agent_tools)
 
+async def unauthorized_node(state: AgentState):
+    """
+    A fallback node triggered when a user tries to access a restricted tool.
+    Returns an error message pretending to be the tool's output.
+    """
+    last_message = state["messages"][-1]
+    tool_calls = getattr(last_message, "tool_calls", [])
+    
+    messages = []
+    for tc in tool_calls:
+        # ตอบกลับไปหา LLM ว่าระบบปฏิเสธการเข้าถึง
+        error_msg = f"System Error: Permission Denied. Role '{state.get('user_role')}' cannot use '{tc['name']}'. Please apologize to the user."
+        messages.append(ToolMessage(content=error_msg, name=tc["name"], tool_call_id=tc["id"]))
+        
+    logger.warning(f"Blocked unauthorized tool access by user role: {state.get('user_role')}")
+    return {"messages": messages}
+
+# ==========================================
+# RBAC Routing Logic
+# ==========================================
+
+def route_based_on_rbac(state: AgentState) -> str:
+    """
+    Inspects the AI's intended tool calls and routes them based on user permissions.
+    """
+    last_message = state["messages"][-1]
+    
+    # ถ้าไม่มีการเรียก Tool ให้จบการทำงาน
+    if not getattr(last_message, "tool_calls", None):
+        return END
+        
+    user_role = state.get("user_role", "customer")
+    
+    # เช็คว่ามี Tool ไหนเป็น Sensitive Tool ไหม
+    for tc in last_message.tool_calls:
+        if tc["name"] in SENSITIVE_TOOLS and user_role not in ["admin", "owner"]:
+            return "unauthorized" # สกัดกั้นทันที!
+            
+    return "tools"
+
 def should_continue(state: AgentState) -> str:
     """
     Determines the next step in the workflow based on the model's decision.
@@ -88,21 +133,33 @@ workflow = StateGraph(AgentState)
 # Register nodes
 workflow.add_node("agent", chatbot_node)
 workflow.add_node("tools", tools_node)
+workflow.add_node("unauthorized", unauthorized_node)
 
 # Set execution flow
 workflow.set_entry_point("agent")
 
+# workflow.add_conditional_edges(
+#     "agent",
+#     should_continue,
+#     {
+#         "tools": "tools",
+#         END: END
+#     }
+# )
+
 workflow.add_conditional_edges(
     "agent",
-    should_continue,
+    route_based_on_rbac,
     {
         "tools": "tools",
+        "unauthorized": "unauthorized",
         END: END
     }
 )
 
 # Circular edge: always return to agent after tool execution to parse results
 workflow.add_edge("tools", "agent")
+workflow.add_edge("unauthorized", "agent")
 
 # memory = MemorySaver()
 

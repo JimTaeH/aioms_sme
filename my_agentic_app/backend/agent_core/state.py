@@ -14,10 +14,12 @@ class AgentState(TypedDict):
         messages: List of conversation messages (user input, AI responses, tool outputs).
                   The `operator.add` reducer ensures new messages are appended, not overwritten.
         user_id: The LINE User ID of the person interacting with the bot.
+        user_role: The role of user such as 'owner', 'admin', or 'customer'.
         extracted_data: Temporary storage for parsed OCR data or intermediate variables.
         requires_human_approval: Flag indicating if the current flow pauses for human-in-the-loop.
     """
     messages: Annotated[List[BaseMessage], operator.add]
     user_id: str
+    user_role: str # 'owner', 'admin', or 'customer'
     extracted_data: Optional[Dict[str, Any]]
     requires_human_approval: bool

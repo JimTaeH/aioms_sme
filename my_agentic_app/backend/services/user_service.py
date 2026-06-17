@@ -5,6 +5,7 @@ import logging
 from sqlalchemy import select
 from backend.core.database import AsyncSessionLocal
 from backend.models.user import User
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 

@@ -69,12 +69,17 @@ class AgentWorkerService:
         # Auto-register the user asynchronously before processing the agent logic
         await UserService.register_user_if_not_exists(user_id)
 
+        user_profile = await UserService.get_user_profile(user_id)
+        current_user_role = user_profile.role if user_profile else "customer"
+        logger.info(f"User {user_id} executing as role: {current_user_role}")
+
         config = {"configurable": {"thread_id": user_id}}
 
         # Initialize the LangGraph state
         initial_state = {
             "messages": [HumanMessage(content=user_text)],
             "user_id": user_id,
+            "user_role": current_user_role,
             "extracted_data": None,
             "requires_human_approval": False
         }
