@@ -7,7 +7,7 @@ import os
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 
 from backend.agent_core.state import AgentState
 # from langgraph.checkpoint.memory import MemorySaver
@@ -93,6 +93,21 @@ async def unauthorized_node(state: AgentState):
     logger.warning(f"Blocked unauthorized tool access by user role: {state.get('user_role')}")
     return {"messages": messages}
 
+async def require_registration_node(state: AgentState):
+    """Node สำหรับแจ้งเตือนให้ผู้ใช้ไปลงทะเบียนผ่าน LIFF"""
+    # คุณสามารถเปลี่ยนเป็น JSON แบบ Flex Message ได้ในอนาคต แต่ตอนนี้ใช้ Text + URL ไปก่อนครับ
+    # สังเกต: ต้องเปลี่ยน YOUR_LIFF_ID เป็นไอดีจริงจาก LINE Developer Console
+    liff_url = "https://liff.line.me/YOUR_LIFF_ID"
+    msg = f"สวัสดีครับ! 🙏 เพื่อการให้บริการที่ถูกต้องและออกเอกสารใบเสนอราคาได้ กรุณาลงทะเบียนข้อมูลลูกค้าที่ลิงก์นี้ก่อนนะครับ: {liff_url}"
+    
+    return {"messages": [AIMessage(content=msg)]}
+
+def route_initial(state: AgentState) -> str:
+    """ตรวจสอบตอนเริ่มต้นกราฟว่าผู้ใช้ลงทะเบียนหรือยัง"""
+    if not state.get("is_registered", False):
+        return "require_registration" # ยังไม่ลงทะเบียน เตะไป Node แจ้งเตือน
+    return "agent" # ลงทะเบียนแล้ว ให้ AI ทำงานตามปกติ
+
 # ==========================================
 # RBAC Routing Logic
 # ==========================================
@@ -134,9 +149,16 @@ workflow = StateGraph(AgentState)
 workflow.add_node("agent", chatbot_node)
 workflow.add_node("tools", tools_node)
 workflow.add_node("unauthorized", unauthorized_node)
+workflow.add_node("require_registration", require_registration_node)
 
 # Set execution flow
-workflow.set_entry_point("agent")
+workflow.set_conditional_entry_point(
+    route_initial,
+    {
+        "require_registration": "require_registration",
+        "agent": "agent"
+    }
+)
 
 # workflow.add_conditional_edges(
 #     "agent",
@@ -160,6 +182,7 @@ workflow.add_conditional_edges(
 # Circular edge: always return to agent after tool execution to parse results
 workflow.add_edge("tools", "agent")
 workflow.add_edge("unauthorized", "agent")
+workflow.add_edge("require_registration", END)
 
 # memory = MemorySaver()
 

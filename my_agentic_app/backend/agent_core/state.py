@@ -21,5 +21,6 @@ class AgentState(TypedDict):
     messages: Annotated[List[BaseMessage], operator.add]
     user_id: str
     user_role: str # 'owner', 'admin', or 'customer'
+    is_registered: bool
     extracted_data: Optional[Dict[str, Any]]
     requires_human_approval: bool

@@ -71,7 +71,8 @@ class AgentWorkerService:
 
         user_profile = await UserService.get_user_profile(user_id)
         current_user_role = user_profile.role if user_profile else "customer"
-        logger.info(f"User {user_id} executing as role: {current_user_role}")
+        is_registered = user_profile.is_registered if user_profile else False
+        logger.info(f"User {user_id} executing as role: {current_user_role} Registered: {is_registered}")
 
         config = {"configurable": {"thread_id": user_id}}
 
@@ -80,6 +81,7 @@ class AgentWorkerService:
             "messages": [HumanMessage(content=user_text)],
             "user_id": user_id,
             "user_role": current_user_role,
+            "is_registered": is_registered,
             "extracted_data": None,
             "requires_human_approval": False
         }

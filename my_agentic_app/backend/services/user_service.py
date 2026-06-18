@@ -15,6 +15,40 @@ class UserService:
     """
     
     @staticmethod
+    async def register_liff_user(data: dict) -> bool:
+        """
+        Updates the user's profile with data received from the LIFF registration form.
+        Sets 'is_registered' to True upon completion.
+        """
+        async with AsyncSessionLocal() as db:
+            try:
+                line_user_id = data.get("line_user_id")
+                query = select(User).where(User.line_user_id == line_user_id)
+                result = await db.execute(query)
+                user = result.scalars().first()
+
+                if not user:
+                    user = User(line_user_id=line_user_id)
+                    db.add(user)
+
+                user.full_name = data.get("full_name")
+                user.phone_number = data.get("phone_number")
+                user.company_name = data.get("company_name")
+                user.tax_id = data.get("tax_id")
+                user.address = data.get("address")
+                
+                user.is_registered = True
+
+                await db.commit()
+                logger.info(f"Successfully registered LIFF profile for user: {line_user_id}")
+                return True
+                
+            except Exception as e:
+                await db.rollback()
+                logger.error(f"Failed to register LIFF user {data.get('line_user_id')}: {str(e)}")
+                return False
+
+    @staticmethod
     async def get_user_profile(line_user_id: str) -> Optional[User]:
         """
         Retrieves the complete user profile from the database using their LINE ID.

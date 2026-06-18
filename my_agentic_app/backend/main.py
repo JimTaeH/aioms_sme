@@ -4,7 +4,9 @@ Assembles routers, middleware, and application state.
 """
 import logging
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from backend.api.line_webhook import router as line_webhook_router
+from backend.api.user_api import router as user_api_router
 
 # Configure basic logging
 logging.basicConfig(level=logging.INFO)
@@ -22,9 +24,18 @@ def create_app() -> FastAPI:
         version="1.0.0"
     )
 
+    app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    )
+
     # Register routers
     # Prefix is optional, but good for versioning e.g., /api/v1/line/webhook
     app.include_router(line_webhook_router, prefix="/api/v1/line", tags=["LINE Webhook"])
+    app.include_router(user_api_router, prefix="/api/users", tags=["Users"])
 
     @app.get("/health")
     async def health_check():

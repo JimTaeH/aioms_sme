@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ลงทะเบียนลูกค้า AIOMS</title>
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <style>
+        body { font-family: 'Sarabun', sans-serif; padding: 20px; background-color: #f5f5f5; }
+        .container { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        input { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px; box-sizing: border-box; }
+        button { width: 100%; padding: 12px; background-color: #06C755; color: white; border: none; border-radius: 5px; font-size: 16px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>ลงทะเบียนลูกค้า</h2>
+        <form id="registerForm">
+            <label>ชื่อ-นามสกุลจริง *</label>
+            <input type="text" id="fullName" required placeholder="เช่น นายสมมติ ทดสอบ">
+            
+            <label>เบอร์โทรศัพท์ *</label>
+            <input type="tel" id="phoneNumber" required placeholder="เช่น 0812345678">
+            
+            <label>ชื่อบริษัท/ร้านค้า (ถ้ามี)</label>
+            <input type="text" id="companyName" placeholder="เช่น บริษัท เอบีซี จำกัด">
+            
+            <label>เลขประจำตัวผู้เสียภาษี (ถ้ามี)</label>
+            <input type="text" id="taxId" placeholder="13 หลัก">
+            
+            <label>ที่อยู่จัดส่ง / ที่อยู่ออกบิล</label>
+            <input type="text" id="address" placeholder="บ้านเลขที่, ถนน, ตำบล, อำเภอ, จังหวัด">
+            
+            <button type="submit">ยืนยันการลงทะเบียน</button>
+        </form>
+    </div>
+
+    <script>
+        // 1. กำหนด LIFF ID (ได้มาจาก LINE Developer)
+        const LIFF_ID = "YOUR_LIFF_ID_HERE"; 
+        
+        // 2. กำหนด URL ของ FastAPI Backend ที่เราทำไว้ (ตัวอย่างใช้ ngrok สำหรับทดสอบ)
+        const API_URL = "https://YOUR_NGROK_URL.ngrok-free.app/api/users/register";
+
+        async function initializeLiff() {
+            try {
+                await liff.init({ liffId: LIFF_ID });
+                if (!liff.isLoggedIn()) {
+                    liff.login();
+                }
+            } catch (err) {
+                console.error("LIFF Initialization failed", err);
+                alert("เกิดข้อผิดพลาดในการโหลดระบบ LINE");
+            }
+        }
+
+        document.getElementById("registerForm").addEventListener("submit", async (e) => {
+            e.preventDefault();
+            
+            // ดึงข้อมูล Profile ปัจจุบันที่เล่นอยู่
+            const profile = await liff.getProfile();
+            const lineUserId = profile.userId;
+
+            // รวบรวมข้อมูลจากฟอร์ม
+            const requestData = {
+                line_user_id: lineUserId,
+                full_name: document.getElementById("fullName").value,
+                phone_number: document.getElementById("phoneNumber").value,
+                company_name: document.getElementById("companyName").value,
+                tax_id: document.getElementById("taxId").value,
+                address: document.getElementById("address").value
+            };
+
+            // ส่งข้อมูลไปหา FastAPI
+            try {
+                const response = await fetch(API_URL, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(requestData)
+                });
+
+                if (response.ok) {
+                    alert("ลงทะเบียนสำเร็จ! สามารถปิดหน้านี้และกลับไปแชทกับบอทได้เลยครับ");
+                    liff.closeWindow(); // ปิดหน้าต่าง LIFF อัตโนมัติ
+                } else {
+                    alert("เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง");
+                }
+            } catch (error) {
+                console.error(error);
+                alert("เชื่อมต่อกับเซิร์ฟเวอร์ไม่ได้");
+            }
+        });
+
+        // เริ่มต้นการทำงาน LIFF ทันทีที่โหลดเว็บ
+        initializeLiff();
+    </script>
+</body>
+</html>
