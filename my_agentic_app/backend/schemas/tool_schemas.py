@@ -47,3 +47,10 @@ class ExtractSlipDataInput(BaseModel):
         ..., 
         description="The strictly required LINE user ID of the sender for database tracking."
     )
+
+class CheckUserProfileInput(BaseModel):
+    """Schema for checking a user's profile and status."""
+    line_user_id: str = Field(
+        ..., 
+        description="The strictly required LINE user ID to look up in the database."
+    )

@@ -12,7 +12,12 @@ from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from backend.agent_core.state import AgentState
 # from langgraph.checkpoint.memory import MemorySaver
 
-from backend.agent_core.tools.db_tools import check_inventory_stock, update_inventory_quantity, add_new_product
+from backend.agent_core.tools.db_tools import (
+    check_inventory_stock, 
+    update_inventory_quantity, 
+    add_new_product, 
+    check_user_profile)
+
 from backend.agent_core.tools.parser_tools import extract_slip_data
 from backend.core.llm_factory import LLMFactory
 
@@ -34,7 +39,8 @@ agent_tools = [
     check_inventory_stock,
     update_inventory_quantity,
     add_new_product,
-    extract_slip_data
+    extract_slip_data,
+    check_user_profile
 ]
 llm_with_tools = llm.bind_tools(agent_tools)
 
@@ -48,9 +54,10 @@ async def chatbot_node(state: AgentState):
     # 1. Get the full conversation history from the state
     full_messages = state.get("messages", [])
     user_role = state.get("user_role", "customer")
+    current_user_id = state.get("user_id", "unknown_id")
 
     # system_instruction = SystemMessage(content=MAIN_AGENT_PROMPT)
-    system_instruction = get_main_agent_prompt(user_role)
+    system_instruction = get_main_agent_prompt(user_role, current_user_id)
 
     filtered_messages = [msg for msg in full_messages if not isinstance(msg, SystemMessage)]
     context_messages = [system_instruction] + filtered_messages
@@ -97,7 +104,7 @@ async def require_registration_node(state: AgentState):
     """Node สำหรับแจ้งเตือนให้ผู้ใช้ไปลงทะเบียนผ่าน LIFF"""
     # คุณสามารถเปลี่ยนเป็น JSON แบบ Flex Message ได้ในอนาคต แต่ตอนนี้ใช้ Text + URL ไปก่อนครับ
     # สังเกต: ต้องเปลี่ยน YOUR_LIFF_ID เป็นไอดีจริงจาก LINE Developer Console
-    liff_url = "https://liff.line.me/YOUR_LIFF_ID"
+    liff_url = "https://liff.line.me/2010442914-ppUIL7TE"
     msg = f"สวัสดีครับ! 🙏 เพื่อการให้บริการที่ถูกต้องและออกเอกสารใบเสนอราคาได้ กรุณาลงทะเบียนข้อมูลลูกค้าที่ลิงก์นี้ก่อนนะครับ: {liff_url}"
     
     return {"messages": [AIMessage(content=msg)]}

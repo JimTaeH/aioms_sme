@@ -10,8 +10,11 @@ from backend.models.inventory import InventoryItem
 from backend.schemas.tool_schemas import (
     CheckInventoryInput,
     UpdateInventoryInput,
-    AddProductInput
+    AddProductInput,
+    CheckUserProfileInput
 )
+
+from backend.models.user import User
 
 import logging
 
@@ -116,3 +119,32 @@ async def add_new_product(sku: str, product_name: str, price: float, initial_qua
         except Exception as e:
             await db.rollback()
             return f"Error adding new product: {str(e)}"
+
+@tool(args_schema=CheckUserProfileInput)
+async def check_user_profile(line_user_id: str) -> str:
+    """
+    Queries the database to retrieve the full profile, role, and registration status of a specific user.
+    """
+    async with AsyncSessionLocal() as db:
+        try:
+            query = select(User).where(User.line_user_id == line_user_id)
+            result = await db.execute(query)
+            user = result.scalars().first()
+            
+            if user:
+                return (
+                    f"User Profile Found:\n"
+                    f"- LINE ID: {user.line_user_id}\n"
+                    f"- Role: {user.role}\n"
+                    f"- Registered: {'Yes' if user.is_registered else 'No'}\n"
+                    f"- Full Name: {user.full_name or 'N/A'}\n"
+                    f"- Company: {user.company_name or 'N/A'}\n"
+                    f"- Customer Grade: {user.customer_grade}\n"
+                    f"- Phone: {user.phone_number or 'N/A'}\n"
+                    f"- Address: {user.address or 'N/A'}"
+                )
+            else:
+                return f"No profile found in the database for LINE ID: {line_user_id}."
+        except Exception as e:
+            logger.error(f"Database error during user profile check: {str(e)}")
+            return f"Error: Unable to query database for user profile."
