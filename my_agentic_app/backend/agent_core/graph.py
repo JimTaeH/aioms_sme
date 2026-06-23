@@ -120,7 +120,8 @@ async def require_registration_node(state: AgentState):
     """Node สำหรับแจ้งเตือนให้ผู้ใช้ไปลงทะเบียนผ่าน LIFF"""
     # คุณสามารถเปลี่ยนเป็น JSON แบบ Flex Message ได้ในอนาคต แต่ตอนนี้ใช้ Text + URL ไปก่อนครับ
     # สังเกต: ต้องเปลี่ยน YOUR_LIFF_ID เป็นไอดีจริงจาก LINE Developer Console
-    liff_url = "https://liff.line.me/2010442914-ppUIL7TE"
+    current_user_id = state.get("user_id")
+    liff_url = f"https://liff.line.me/2010442914-ppUIL7TE?chat_uid={current_user_id}"
     msg = f"สวัสดีครับ! 🙏 เพื่อการให้บริการที่ถูกต้องและออกเอกสารใบเสนอราคาได้ กรุณาลงทะเบียนข้อมูลลูกค้าที่ลิงก์นี้ก่อนนะครับ: {liff_url}"
     
     return {"messages": [AIMessage(content=msg)]}

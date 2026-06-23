@@ -61,9 +61,16 @@
             const profile = await liff.getProfile();
             const lineUserId = profile.userId;
 
+            const urlParams = new URLSearchParams(window.location.search);
+            const chatUid = urlParams.get('chat_uid');
+
+            if (chatUid) {
+                finalUserId = chatUid;
+            }
+
             // รวบรวมข้อมูลจากฟอร์ม
             const requestData = {
-                line_user_id: lineUserId,
+                line_user_id: finalUserId,
                 full_name: document.getElementById("fullName").value,
                 phone_number: document.getElementById("phoneNumber").value,
                 company_name: document.getElementById("companyName").value,
