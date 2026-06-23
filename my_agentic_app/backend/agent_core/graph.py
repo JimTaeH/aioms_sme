@@ -24,6 +24,9 @@ from backend.core.llm_factory import LLMFactory
 from langchain_core.messages import trim_messages
 from backend.agent_core.prompts.system_prompts import get_main_agent_prompt
 
+import logging
+logger = logging.getLogger(__name__)
+
 ## 1. Initialize the LLM via Factory Pattern
 # You can easily switch providers here (e.g., provider="typhoon", model_name="typhoon-v1.5x-70b-instruct")
 llm = LLMFactory.create_llm(
@@ -55,9 +58,10 @@ async def chatbot_node(state: AgentState):
     full_messages = state.get("messages", [])
     user_role = state.get("user_role", "customer")
     current_user_id = state.get("user_id", "unknown_id")
+    is_registered = state.get("is_registered", False)
 
     # system_instruction = SystemMessage(content=MAIN_AGENT_PROMPT)
-    system_instruction = get_main_agent_prompt(user_role, current_user_id)
+    system_instruction = get_main_agent_prompt(user_role, current_user_id, is_registered)
 
     filtered_messages = [msg for msg in full_messages if not isinstance(msg, SystemMessage)]
     context_messages = [system_instruction] + filtered_messages
@@ -73,9 +77,21 @@ async def chatbot_node(state: AgentState):
         include_system=True, # Set to True if you have a SystemMessage at index 0 that must be kept
         allow_partial=False  # Ensures we don't break tool-call message pairs
     )
+
+    logger.info(f"\n========== 🧠 DEBUG: LLM INPUT (User: {current_user_id}) ==========")
+    for idx, msg in enumerate(trimmed_messages):
+        content_preview = msg.content if isinstance(msg, SystemMessage) else (msg.content[:200] + "..." if len(msg.content) > 200 else msg.content)
+        logger.info(f"[{idx}] {msg.type.upper()}: {content_preview}")
+    logger.info("====================================================================\n")
     
     # 3. Invoke the LLM with the short-term window
     response = await llm_with_tools.ainvoke(trimmed_messages)
+
+    logger.info(f"\n========== 🤖 DEBUG: LLM OUTPUT ==========")
+    logger.info(f"CONTENT: {response.content}")
+    if getattr(response, 'tool_calls', None):
+        logger.info(f"TOOLS CALLED: {response.tool_calls}")
+    logger.info("==========================================\n")
     
     # 4. Return ONLY the new response. 
     # LangGraph's operator.add will append this to the full state in the database.

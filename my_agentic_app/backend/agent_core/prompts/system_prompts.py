@@ -7,10 +7,18 @@ Formatted using Markdown for better LLM comprehension.
 # Main Agent System Prompt Builder
 # ==========================================
 
-def get_main_agent_prompt(user_role: str, line_user_id: str) -> str:
+def get_main_agent_prompt(user_role: str, line_user_id: str, is_registered: bool) -> str:
     """
     Generates the main system prompt dynamically based on the user's role.
     """
+    registration_context = ""
+    if is_registered:
+        registration_context = (
+            "\n**CRITICAL NOTE**: The user has ALREADY REGISTERED successfully! "
+            "Disregard any previous messages in the chat history where you asked them to register. "
+            "Do NOT ask them to register again. You can now assist them fully."
+        )
+
     return f"""
 # Role and Identity
 You are an intelligent, polite, and highly efficient AI assistant for an SME (Small and Medium Enterprise) operation management system.

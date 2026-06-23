@@ -98,7 +98,7 @@ class AgentWorkerService:
             
             # Extract the last AI message from the conversation state
             messages = final_state.get("messages", [])
-            logger.info(f"LLM Messages: {messages}")
+            # logger.info(f"LLM Messages: {messages}")
             
             if messages:
                 last_message_content = messages[-1].content
