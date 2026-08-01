@@ -7,7 +7,7 @@ import os
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
+from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, ToolMessage
 
 from backend.agent_core.state import AgentState
 # from langgraph.checkpoint.memory import MemorySaver
@@ -24,6 +24,8 @@ from backend.core.llm_factory import LLMFactory
 from langchain_core.messages import trim_messages
 from backend.agent_core.prompts.system_prompts import get_main_agent_prompt
 
+from backend.services.nlp_service import NLPEngineService
+
 import logging
 logger = logging.getLogger(__name__)
 
@@ -35,6 +37,12 @@ llm = LLMFactory.create_llm(
     # model_name="pathumma-thaillm-qwen3-8b-think-3.0.0",
     temperature=0.1
 )
+# llm = LLMFactory.create_llm(
+#     provider="google", 
+#     model_name="gemini-3.5-flash",
+#     # model_name="pathumma-thaillm-qwen3-8b-think-3.0.0",
+#     temperature=0.1
+# )
 
 # 2. Define and Bind Tools
 # Gemma models (especially 27B+ versions) have strong reasoning for tool calling
@@ -49,6 +57,33 @@ llm_with_tools = llm.bind_tools(agent_tools)
 
 SENSITIVE_TOOLS = ["check_inventory_stock", "update_inventory_quantity", "add_new_product"]
 
+async def nlp_triage_node(state: AgentState):
+    """Node ด่านหน้า: ทำหน้าที่จับ Intent และสกัดคำสั่งซื้อ"""
+    last_message = state["messages"][-1]
+    
+    # ทำงานเฉพาะกับข้อความที่เป็นของมนุษย์ (HumanMessage) เท่านั้น
+    if getattr(last_message, "type", "") != "human":
+        return {}
+        
+    user_text = last_message.content
+
+    # 1. จำแนก Intent
+    intent_res = await NLPEngineService.classify_intent(user_text)
+    logger.info(f"🎯 [NLP Triage] Detected Intent: '{intent_res.intent}' (Conf: {intent_res.confidence:.2f})")
+    
+    extracted_dict = None
+    
+    # 2. ถ้า Intent คือการสั่งของ ➔ สกัด Entity ทันที!
+    if intent_res.intent == "place_order":
+        entity_res = await NLPEngineService.extract_order_entities(user_text)
+        extracted_dict = entity_res.model_dump()
+        logger.info(f"📦 [NLP Extracted Entities]: {extracted_dict}")
+        
+    return {
+        "nlp_intent": intent_res.intent,
+        "nlp_extracted_entities": extracted_dict
+    }
+
 # 3. Define Graph Nodes with Async Support
 async def chatbot_node(state: AgentState):
     """
@@ -59,9 +94,15 @@ async def chatbot_node(state: AgentState):
     user_role = state.get("user_role", "customer")
     current_user_id = state.get("user_id", "unknown_id")
     is_registered = state.get("is_registered", False)
+    nlp_intent = state.get("nlp_intent")
+    nlp_extracted_entities = state.get("nlp_extracted_entities")
 
     # system_instruction = SystemMessage(content=MAIN_AGENT_PROMPT)
-    system_instruction = get_main_agent_prompt(user_role, current_user_id, is_registered)
+    system_instruction = get_main_agent_prompt(user_role, 
+                                            current_user_id,
+                                            is_registered,
+                                            nlp_intent,
+                                            nlp_extracted_entities)
 
     filtered_messages = [msg for msg in full_messages if not isinstance(msg, SystemMessage)]
     context_messages = [system_instruction] + filtered_messages
@@ -86,6 +127,15 @@ async def chatbot_node(state: AgentState):
     
     # 3. Invoke the LLM with the short-term window
     response = await llm_with_tools.ainvoke(trimmed_messages)
+
+    if getattr(response, "tool_calls", None):
+        for tc in response.tool_calls:
+            # ถ้า Tool ที่เรียกมีช่องที่ต้องกรอก "line_user_id"
+            if "line_user_id" in tc["args"]:
+                # 🚨 บังคับยัดค่าที่ถูกต้องจากระบบลงไป ทับสิ่งที่ AI มั่วมาทันที!
+                tc["args"]["line_user_id"] = current_user_id
+                
+                logger.info(f"🔒 [Security Override] Enforced strict User ID for tool '{tc['name']}'")
 
     logger.info(f"\n========== 🤖 DEBUG: LLM OUTPUT ==========")
     logger.info(f"CONTENT: {response.content}")
@@ -174,15 +224,18 @@ workflow.add_node("agent", chatbot_node)
 workflow.add_node("tools", tools_node)
 workflow.add_node("unauthorized", unauthorized_node)
 workflow.add_node("require_registration", require_registration_node)
+workflow.add_node("nlp_triage", nlp_triage_node)
 
 # Set execution flow
 workflow.set_conditional_entry_point(
     route_initial,
     {
         "require_registration": "require_registration",
-        "agent": "agent"
+        "agent": "nlp_triage"
     }
 )
+
+workflow.add_edge("nlp_triage", "agent")
 
 # workflow.add_conditional_edges(
 #     "agent",

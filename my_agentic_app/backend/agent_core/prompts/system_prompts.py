@@ -7,7 +7,11 @@ Formatted using Markdown for better LLM comprehension.
 # Main Agent System Prompt Builder
 # ==========================================
 
-def get_main_agent_prompt(user_role: str, line_user_id: str, is_registered: bool) -> str:
+def get_main_agent_prompt(user_role: str, 
+                          line_user_id: str,
+                          is_registered: bool,
+                          nlp_intent: str = None,
+                          extracted_entities: dict = None) -> str:
     """
     Generates the main system prompt dynamically based on the user's role.
     """
@@ -17,6 +21,17 @@ def get_main_agent_prompt(user_role: str, line_user_id: str, is_registered: bool
             "\n**CRITICAL NOTE**: The user has ALREADY REGISTERED successfully! "
             "Disregard any previous messages in the chat history where you asked them to register. "
             "Do NOT ask them to register again. You can now assist them fully."
+        )
+    
+    nlp_injection_prompt = ""
+    if nlp_intent:
+        nlp_injection_prompt += f"\n- **[NLP Engine Detected Intent]**: '{nlp_intent}'"
+        
+    if extracted_entities and "items" in extracted_entities and len(extracted_entities["items"]) > 0:
+        items_str = ", ".join([f"{it['quantity']} {it['unit'] or 'ชิ้น'} ของ '{it['item_name']}'" for it in extracted_entities["items"]])
+        nlp_injection_prompt += (
+            f"\n- **[NLP Extracted Order Items]**: {items_str}\n"
+            f"👉 ภารกิจของคุณ: ให้เช็คสต็อกของสินค้าเหล่านี้ และสรุปออเดอร์ให้ลูกค้าคอนเฟิร์ม"
         )
 
     return f"""

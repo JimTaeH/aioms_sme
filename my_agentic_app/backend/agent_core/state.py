@@ -22,5 +22,7 @@ class AgentState(TypedDict):
     user_id: str
     user_role: str # 'owner', 'admin', or 'customer'
     is_registered: bool
+    nlp_intent: Optional[str]
+    nlp_extracted_entities: Optional[dict]
     extracted_data: Optional[Dict[str, Any]]
     requires_human_approval: bool

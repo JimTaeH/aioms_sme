@@ -83,7 +83,9 @@ class AgentWorkerService:
             "user_role": current_user_role,
             "is_registered": is_registered,
             "extracted_data": None,
-            "requires_human_approval": False
+            "requires_human_approval": False,
+            "nlp_intent": None,
+            "nlp_extracted_entities": None
         }
 
         try:
