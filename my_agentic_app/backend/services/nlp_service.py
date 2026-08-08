@@ -2,11 +2,13 @@
 NLP Engine Service for Intent Classification and Entity Extraction.
 """
 import logging
-from langchain_core.prompts import ChatPromptTemplate
-# 1. เพิ่มการ Import PydanticOutputParser
-from langchain_core.output_parsers import PydanticOutputParser 
+
 from backend.core.llm_factory import LLMFactory
 from backend.schemas.nlp_schemas import ClassifiedIntent, ExtractedOrder
+
+# 1. เพิ่มการ Import PydanticOutputParser
+from langchain_core.output_parsers import PydanticOutputParser
+from langchain_core.prompts import ChatPromptTemplate
 
 logger = logging.getLogger(__name__)
 

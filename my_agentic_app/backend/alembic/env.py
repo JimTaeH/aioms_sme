@@ -35,6 +35,13 @@ target_metadata = Base.metadata
 
 # --- The rest of the file remains standard for the async template ---
 
+# เพิ่มฟังก์ชันนี้ไว้ด้านบนๆ ของไฟล์ (ก่อนถึงฟังก์ชัน run_migrations_online)
+def include_object(object, name, type_, reflected, compare_to):
+    # ให้ Alembic เมินตารางที่ชื่อขึ้นต้นด้วย checkpoint 
+    if type_ == "table" and name and name.startswith("checkpoint"):
+        return False
+    return True
+
 def run_migrations_offline() -> None:
     """
     Run migrations in 'offline' mode.
@@ -48,6 +55,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        include_object=include_object
     )
 
     with context.begin_transaction():
@@ -57,7 +65,7 @@ def do_run_migrations(connection: Connection) -> None:
     """
     Run the actual migration processing.
     """
-    context.configure(connection=connection, target_metadata=target_metadata)
+    context.configure(connection=connection, target_metadata=target_metadata, include_object=include_object)
     with context.begin_transaction():
         context.run_migrations()
 
